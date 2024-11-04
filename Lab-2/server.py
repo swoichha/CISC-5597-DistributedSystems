@@ -4,6 +4,7 @@ import threading
 import logging
 import os
 import sys
+from datetime import datetime
 
 # Configure logging for the server
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,15 +20,18 @@ class MyServer:
         with open(self.file_path, 'w') as f:
             f.write("")  # Initialize the file as empty
 
-    def square(self, x):
-        result = x * x
-        self.broadcast_result(f"Square of {x} is {result}")
-        return result
-
-    def cube(self, x):
-        result = x * x * x
-        self.broadcast_result(f"Cube of {x} is {result}")
-        return result
+    def set_value(self, value):
+        """Set the value in this node and broadcast to other nodes."""
+        message = f"Set value to {value}"
+        logging.info(f"Node on port {self.port} setting value: '{message}'")
+        
+        # Write to this node's file
+        with open(self.file_path, 'w') as f:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            f.write(f"{timestamp} - {message}\n")
+        # Broadcast to other nodes
+        self.broadcast_result(message)
+        return f"Value set to {value} and broadcasted"
 
     def broadcast_result(self, message):
         """Send the result to all other nodes."""
@@ -43,8 +47,9 @@ class MyServer:
     def receive_result(self, message):
         """Receive a result from another node and write it to CISC5597.txt."""
         logging.info(f"Node on port {self.port} received result: '{message}'")
-        with open(self.file_path, 'a') as f:
-            f.write(message + "\n")
+        with open(self.file_path, 'w') as f:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            f.write(f"{timestamp} - {message}\n")
         return "Result received and saved"
 
 def run_server(port, other_ports):

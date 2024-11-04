@@ -1,0 +1,4 @@
+Square of 5 is 25
+Cube of 5 is 125
+Square of 4 is 16
+Cube of 4 is 64
