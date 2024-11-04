@@ -15,7 +15,7 @@ def main():
 
     try:
         # Make the RPC calls
-        number = 5
+        number = 4
         square_result = server.square(number)
         cube_result = server.cube(number)
 
@@ -23,10 +23,6 @@ def main():
         logging.info(f"Server on port {port} handled the operation.")
         logging.info(f"Square of {number}: {square_result}")
         logging.info(f"Cube of {number}: {cube_result}")
-
-        # Instruct the selected server to send a hello message to the other nodes
-        logging.info(f"Client instructing server on port {port} to send 'hello' to other nodes.")
-        server.send_hello()
 
     except Exception as e:
         logging.error(f"Error connecting to server on port {port}: {e}")
