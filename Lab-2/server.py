@@ -113,7 +113,7 @@ class MyServer:
 
     def update_file(self, value):
         """Update the local CISC5597.txt file with the new value."""
-        with open(self.file_path, 'a') as f:  # Append new value to the file
+        with open(self.file_path, 'w') as f:  # Append new value to the file
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             f.write(f"{timestamp} - Set value to: {value}\n")
         logging.info(colored(f"Node on port {self.port} updated file with value: '{value}'", 'green'))
