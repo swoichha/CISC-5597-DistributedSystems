@@ -1,5 +1,4 @@
 import xmlrpc.client
-import random
 import logging
 
 # Configure logging for the client
@@ -8,34 +7,40 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def main():
     # List of available server ports
     ports = [8000, 8001, 8002]
-    
+
     while True:
         # User command input
-        command = input("Enter command (e.g., 'set value 5' or 'exit' to quit): ").strip()
+        command = input("Enter command (e.g., 'set value 5 on 8000' or 'exit' to quit): ").strip()
         
         if command.lower() == "exit":
             logging.info("Exiting client.")
             break
-        
+
         if command.startswith("set value"):
             try:
-                # Parse value from the command
-                value = int(command.split()[2])
-                
-                # Randomly select one of the servers for the call
-                port = random.choice(ports)
+                # Parse value and port from the command
+                parts = command.split()
+                value = int(parts[2])
+                port = int(parts[4])
+
+                # Validate if the port is in available ports
+                if port not in ports:
+                    logging.error(f"Invalid port {port}. Choose from {ports}.")
+                    continue
+
+                # Connect to the chosen server
                 server = xmlrpc.client.ServerProxy(f"http://localhost:{port}")
 
-                # Call the set_value function on the server
-                response = server.set_value(value)
+                # Call the propose_value function on the specified server
+                response = server.propose_value(value)
                 logging.info(f"Server on port {port} responded: {response}")
 
-            except ValueError:
-                logging.error("Invalid command format. Use 'set value <number>'.")
+            except (ValueError, IndexError):
+                logging.error("Invalid command format. Use 'set value <number> on <port>'.")
             except Exception as e:
                 logging.error(f"Error executing command on server: {e}")
         else:
-            logging.error("Invalid command. Use 'set value <number>' or 'exit' to quit.")
+            logging.error("Invalid command. Use 'set value <number> on <port>' or 'exit' to quit.")
 
 if __name__ == "__main__":
     main()
