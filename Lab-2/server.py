@@ -50,7 +50,7 @@ class MyServer:
 
     def propose_value(self, value):
         """Propose a value using the Paxos algorithm."""
-        logging.info(colored(f"Node on port {self.port} proposing value: {value}", 'blue'))
+        logging.info(colored(f"Step 1: Node on port {self.port} proposing value: {value}", 'blue'))
         
         proposal_id = self.proposer_id
         proposals = {}
@@ -59,6 +59,7 @@ class MyServer:
         # Prepare phase
         for acceptor_port in self.other_ports:
             try:
+                logging.info(colored(f"Step 2: Sending prepare request to node {acceptor_port}", 'cyan'))
                 with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
                     accepted_id, accepted_value = proxy.prepare(proposal_id)
                     if accepted_id is not None:
@@ -67,26 +68,30 @@ class MyServer:
             except Exception as e:
                 logging.error(f"Error during prepare phase with node {acceptor_port}: {e}")
 
+        logging.info(colored(f"Step 3: Received {promises} promises out of {len(self.other_ports)} nodes", 'cyan'))
         if promises > len(self.other_ports) // 2:
             if proposals:
                 # If any previous values were accepted, use the highest one
                 accepted_value = max(proposals.items(), key=lambda x: x[0])[1]
                 value = accepted_value
-                logging.info(colored(f"Node on port {self.port} using previous value: {value}", 'green'))
+                logging.info(colored(f"Step 4: Node on port {self.port} using previous value: {value}", 'green'))
 
             # Accept phase
             accepted_count = 0
             for acceptor_port in self.other_ports:
                 proposal = Proposal(proposal_id, value)
                 try:
+                    logging.info(colored(f"Step 5: Sending accept request to node {acceptor_port}", 'yellow'))
                     with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
                        if proxy.accept(proposal.__dict__):
                             accepted_count += 1
                 except Exception as e:
                     logging.error(f"Error during accept phase with node {acceptor_port}: {e}")
 
+            logging.info(colored(f"Step 6: Received {accepted_count} acceptances out of {len(self.other_ports)} nodes", 'yellow'))
             if accepted_count > len(self.other_ports) // 2:
                 # Commit phase
+                logging.info(colored(f"Step 7: Consensus reached, committing value '{value}'", 'green'))
                 self.update_file(value)
                 self.broadcast_commit(value)
                 return f"Value '{value}' has been updated and committed."
@@ -152,7 +157,7 @@ if __name__ == "__main__":
     all_ports = [8000, 8001, 8002]
     
     if port not in all_ports:
-        print(f"Error: Invalid port {port}. Allowed ports are {all_ports}.")
+        print(f"\033[91m\nError: Invalid port {port}. Allowed ports are {all_ports}.\033[0m")
         sys.exit(1)
 
     # Determine the other ports for broadcasting
