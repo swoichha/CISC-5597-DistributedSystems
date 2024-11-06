@@ -26,7 +26,8 @@ class Acceptor:
         if self.minProposal is None or proposal_id > self.minProposal:
             self.minProposal = proposal_id
             return self.acceptedProposal, self.acceptedValue
-        return None, None
+        # If the proposal ID is not higher, return None, None
+        return self.acceptedProposal, self.acceptedValue
 
     def accept(self, proposal):
         if proposal.proposal_id >= self.minProposal:
@@ -49,51 +50,50 @@ class MyServer:
             f.write("")  # Initialize the file as empty
 
     def propose_value(self, value):
-        """Propose a value using the Paxos algorithm."""
         logging.info(colored(f"Step 1: Node on port {self.port} proposing value: {value}", 'blue'))
         
         proposal_id = self.proposer_id
         proposals = {}
         promises = 0
 
-        # Prepare phase
+        # Step 2: Prepare phase
         for acceptor_port in self.other_ports:
             try:
-                logging.info(colored(f"Step 2: Sending prepare request to node {acceptor_port}", 'cyan'))
                 with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
                     accepted_id, accepted_value = proxy.prepare(proposal_id)
                     if accepted_id is not None:
                         proposals[accepted_id] = accepted_value
+                    logging.info(colored(f"Step 2: Received prepare response from node {acceptor_port} with proposal ID: {accepted_id} and value: {accepted_value}", 'yellow'))
                     promises += 1
             except Exception as e:
                 logging.error(f"Error during prepare phase with node {acceptor_port}: {e}")
 
-        logging.info(colored(f"Step 3: Received {promises} promises out of {len(self.other_ports)} nodes", 'cyan'))
+        # Step 3: Check if majority promises were received
         if promises > len(self.other_ports) // 2:
+            # Step 4: Use the accepted value with the highest proposal ID if any exists
             if proposals:
-                # If any previous values were accepted, use the highest one
-                accepted_value = max(proposals.items(), key=lambda x: x[0])[1]
-                value = accepted_value
-                logging.info(colored(f"Step 4: Node on port {self.port} using previous value: {value}", 'green'))
+                highest_proposal_id = max(proposals)
+                accepted_value = proposals[highest_proposal_id]
+                value = accepted_value  # Replace proposed value with the accepted value for highest accepted proposal ID
+                logging.info(colored(f"Step 4: Node on port {self.port} using previously accepted value: {value} from highest proposal ID: {highest_proposal_id}", 'green'))
 
-            # Accept phase
+            # Step 5: Accept phase
             accepted_count = 0
             for acceptor_port in self.other_ports:
                 proposal = Proposal(proposal_id, value)
                 try:
-                    logging.info(colored(f"Step 5: Sending accept request to node {acceptor_port}", 'yellow'))
                     with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
-                       if proxy.accept(proposal.__dict__):
+                        if proxy.accept(proposal.__dict__):
                             accepted_count += 1
+                            logging.info(colored(f"Step 5: Node on port {self.port} received accept confirmation from node {acceptor_port}", 'yellow'))
                 except Exception as e:
                     logging.error(f"Error during accept phase with node {acceptor_port}: {e}")
 
-            logging.info(colored(f"Step 6: Received {accepted_count} acceptances out of {len(self.other_ports)} nodes", 'yellow'))
+            # Step 6: Commit if majority of acceptors accepted the proposal
             if accepted_count > len(self.other_ports) // 2:
-                # Commit phase
-                logging.info(colored(f"Step 7: Consensus reached, committing value '{value}'", 'green'))
                 self.update_file(value)
                 self.broadcast_commit(value)
+                logging.info(colored(f"Step 7: Node on port {self.port} consensus reached with value: {value}. Broadcasting commit.", 'blue'))
                 return f"Value '{value}' has been updated and committed."
 
         return "Failed to reach consensus."
