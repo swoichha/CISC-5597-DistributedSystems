@@ -1,6 +1,6 @@
 import xmlrpc.server
 import xmlrpc.client
-import threading
+import time
 import logging
 import os
 import sys
@@ -18,89 +18,125 @@ class Proposal:
 
 class Acceptor:
     def __init__(self):
+        # Initializing with None for the 1st Proposal as they haven't been set yet.
         self.minProposal = None
         self.acceptedProposal = None
         self.acceptedValue = None
+        self.promise = False
 
+    # Step 3: Respond to Prepare(n) from Proposer:
     def prepare(self, proposal_id):
+        logging.info(colored(f"RECEIVED: Prepare {proposal_id} for new proposal", 'green'))
+        """If self.minProposal is None (first proposal) or proposal_id > self.minProposal,
+        update minProposal and promise to accept the proposal"""
+        
         if self.minProposal is None or proposal_id > self.minProposal:
             self.minProposal = proposal_id
-            return self.acceptedProposal, self.acceptedValue
-        # If the proposal ID is not higher, return None, None
-        return self.acceptedProposal, self.acceptedValue
+            self.promise = True
+            logging.info(colored(f"STEP 3: Respond to Prepare({proposal_id}): Setting minProposal to {proposal_id}", 'green'))
+
+        # If proposal_id is smaller than the current minProposal, reject the proposal
+        elif proposal_id < self.minProposal:
+            self.promise = False
+            logging.info(colored(f"STEP 3: Respond to Prepare({proposal_id}): Rejected proposal because {proposal_id} < {self.minProposal}", 'red'))
+
+        return self.acceptedProposal, self.acceptedValue, self.promise
 
     def accept(self, proposal):
         if proposal.proposal_id >= self.minProposal:
             self.minProposal = proposal.proposal_id
             self.acceptedProposal = proposal.proposal_id
             self.acceptedValue = proposal.value
+            logging.info(colored(f"STEP 6: Respond to Accept({proposal.proposal_id},{proposal.value})", 'yellow'))
             return True
         return False
 
-
+# Paxos Algorithm Implementation
 class MyServer:
     def __init__(self, port, other_ports):
         self.port = port
         self.other_ports = other_ports
         self.file_path = f"{port}/CISC5597.txt"
-        self.proposer_id = port  # Use port as unique proposer ID
+        self.proposer_id = port   # Use port as unique proposer ID
         self.acceptors = [Acceptor() for _ in other_ports]  # Acceptor instances for other nodes
         os.makedirs(str(port), exist_ok=True)
         with open(self.file_path, 'w') as f:
-            f.write("")  # Initialize the file as empty
+            f.write("")  # Initialize the file as empty        
 
     def propose_value(self, value):
-        logging.info(colored(f"Step 1: Node on port {self.port} proposing value: {value}", 'blue'))
         
         proposal_id = self.proposer_id
         proposals = {}
         promises = 0
+        required_majority = 2 #we do not count the node that sends the req to itself 
 
-        # Step 2: Prepare phase
+        logging.info(colored(f"STEP 1: PREPARE({proposal_id}) by node {self.port}", 'blue'))
         for acceptor_port in self.other_ports:
             try:
                 with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
-                    accepted_id, accepted_value = proxy.prepare(proposal_id)
-                    if accepted_id is not None:
-                        proposals[accepted_id] = accepted_value
-                    logging.info(colored(f"Step 2: Received prepare response from node {acceptor_port} with proposal ID: {accepted_id} and value: {accepted_value}", 'yellow'))
-                    promises += 1
-            except Exception as e:
-                logging.error(f"Error during prepare phase with node {acceptor_port}: {e}")
+                    
+                    # Step 2: Broadcast Prepare(n) to all servers
+                    logging.info(colored(f"STEP 2: Broadcast Prepare({proposal_id}) to all servers by node {self.port}", 'blue'))
+                    acceptedProposal_id, accepted_value, received_promise = proxy.prepare(proposal_id)
+                    # Step 4: Receiving response for step-2
+                    logging.info(colored(f"STEP 4: Received Respond to Prepare({proposal_id}) from {acceptor_port}", 'blue'))
+                    if received_promise:
+                        promises += 1
+                    print("PROMISES-=-==-==-=", promises)
 
-        # Step 3: Check if majority promises were received
-        if promises > len(self.other_ports) // 2:
+                    """This will be executed only if step 2 returned a previously set value on acceptedValue"""
+                    if accepted_value:
+                        logging.info(colored(f"STEP 4.1: acceptedValue: {accepted_value} was returned in the response from node {acceptor_port} with proposal ID: {acceptedProposal_id}", 'cyan'))
+                        proposals[acceptedProposal_id] = accepted_value
+                        print("proposals[acceptedProposal_id]*-*-*-*-*----*",proposals[acceptedProposal_id])
+                    print("*-**--*-*--*-*-*--*--*- Test 1")
+
+            except Exception as e:
+                logging.error(colored(f"Error during prepare phase with node {acceptor_port}: {e}", "red"))
+                    # if received_promise:
+                    #     promises += 1
+                    # print("PROMISES-=-==-==-=", promises)
+        # Step 4: Check if majority response were received
+        print("*-**--*-*--*-*-*--*--*- Test 2")
+        if promises >= required_majority:
             # Step 4: Use the accepted value with the highest proposal ID if any exists
+            print("*-**--*-*--*-*-*--*--*- Test 3")
+            
             if proposals:
+                print("PROPOSAL //////////",proposals)
+
                 highest_proposal_id = max(proposals)
-                accepted_value = proposals[highest_proposal_id]
-                value = accepted_value  # Replace proposed value with the accepted value for highest accepted proposal ID
-                logging.info(colored(f"Step 4: Node on port {self.port} using previously accepted value: {value} from highest proposal ID: {highest_proposal_id}", 'green'))
+                print("//////////",highest_proposal_id)
+
+                # accepted_value = proposals[highest_proposal_id]
+                value = proposals[highest_proposal_id]  # Replace proposed value with the accepted value for highest accepted proposal ID
+                logging.info(colored(f"STEP 4.2: Node on port {self.port} using previously accepted value: {value} from highest proposal ID: {highest_proposal_id}", 'cyan'))
 
             # Step 5: Accept phase
             accepted_count = 0
             for acceptor_port in self.other_ports:
+                print("*-**--*-*--*-*-*--*--*- Test 4")
                 proposal = Proposal(proposal_id, value)
                 try:
                     with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
+                        logging.info(colored(f"STEP 5: Broadcast Accept({proposal_id},{value}) to all servers", 'blue'))
                         if proxy.accept(proposal.__dict__):
                             accepted_count += 1
-                            logging.info(colored(f"Step 5: Node on port {self.port} received accept confirmation from node {acceptor_port}", 'yellow'))
                 except Exception as e:
                     logging.error(f"Error during accept phase with node {acceptor_port}: {e}")
 
-            # Step 6: Commit if majority of acceptors accepted the proposal
-            if accepted_count > len(self.other_ports) // 2:
-                self.update_file(value)
+            # Step 7: Commit if majority of acceptors accepted the proposal
+            if accepted_count >= required_majority:
+                logging.info(colored(f"STEP 7: Node on port {self.port} reached consensus with n: {self.proposer_id} value: {value}. Broadcasting commit.", 'blue'))
+                
                 self.broadcast_commit(value)
-                logging.info(colored(f"Step 7: Node on port {self.port} consensus reached with value: {value}. Broadcasting commit.", 'blue'))
                 return f"Value '{value}' has been updated and committed."
 
         return "Failed to reach consensus."
 
+# Broadcast Prepare(n) to all servers
     def prepare(self, proposal_id):
         """Handle prepare requests from proposers."""
-        logging.info(colored(f"Node on port {self.port} received prepare request with ID: {proposal_id}", 'yellow'))
         return self.acceptors[0].prepare(proposal_id)
 
     # the accept method to handle both dict and Proposal objects
@@ -113,7 +149,6 @@ class MyServer:
             logging.error(f"Invalid proposal type: {type(proposal)}. Expected Proposal or dict.")
             return False
 
-        logging.info(colored(f"Node on port {self.port} received accept request with ID: {proposal.proposal_id} and value: {proposal.value}", 'yellow'))
         return self.acceptors[0].accept(proposal)
 
     def update_file(self, value):
@@ -125,7 +160,7 @@ class MyServer:
 
     def broadcast_commit(self, value):
         """Broadcast the commit message to all other nodes."""
-        logging.info(colored(f"Node on port {self.port} broadcasting commit value: '{value}'", 'blue'))
+        logging.info(colored(f"Node on port {self.port} broadcasting commit value: '{value}'", 'yellow'))
         for other_port in self.other_ports:
             try:
                 with xmlrpc.client.ServerProxy(f"http://localhost:{other_port}") as proxy:
@@ -142,7 +177,7 @@ def run_server(port, other_ports):
     server = xmlrpc.server.SimpleXMLRPCServer(("localhost", port), allow_none=True)
     my_server = MyServer(port, other_ports)
     server.register_instance(my_server)
-    logging.info(colored(f"Server running on port {port}...", 'cyan'))
+    logging.info(colored(f"Server running on port {port}...", 'green'))
     server.serve_forever()
 
 if __name__ == "__main__":

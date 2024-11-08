@@ -11,7 +11,7 @@ def main():
 
     while True:
         # User command input
-        command = input("Enter command (e.g., 'set value 5 on 8000' or 'exit' to quit): ").strip()
+        command = input("Enter command (e.g., 'set value <value> on <node_number>' or 'exit' to quit): ").strip()
         
         if command.lower() == "exit":
             logging.info(colored("Exiting client.", 'green'))
@@ -41,7 +41,7 @@ def main():
             except Exception as e:
                 logging.error(colored(f"Error executing command on server: {e}","red"))
         else:
-            logging.error(colored("Invalid command. Use 'set value <number> on <port>' or 'exit' to quit.",'red'))
+            logging.error(colored("Invalid command. Use 'set value <value> on <node_number>' or 'exit' to quit.",'red'))
 
 if __name__ == "__main__":
     main()
