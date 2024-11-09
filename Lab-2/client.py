@@ -1,47 +1,81 @@
 import xmlrpc.client
 import logging
-from termcolor import colored  # For colored logging
+from termcolor import colored
+import time
 
-# Configure logging for the client
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main():
-    # List of available server ports
     ports = [8000, 8001, 8002]
 
     while True:
-        # User command input
-        command = input("Enter command (e.g., 'set value <value> on <node_number>' or 'exit' to quit): ").strip()
+        command = input("Enter command (e.g., 'set value <value> on <node_number>', 'A_wins <nodeA_ID> <nodeB_ID> <valueA> <valueB> <delay>', 'restart'): ").strip()
         
         if command.lower() == "exit":
             logging.info(colored("Exiting client.", 'green'))
             break
 
-        if command.startswith("set value"):
+        if command.startswith("A_wins") or command.startswith("B_wins"):
             try:
-                # Parse value and port from the command
+                parts = command.split()
+                operation = parts[0]
+                nodeA_id = int(parts[1])
+                nodeB_id = int(parts[2])
+                valueA = int(parts[3])
+                valueB = int(parts[4])
+                delay = int(parts[5]) if len(parts) > 5 else 0  # Optional delay parameter
+
+                if nodeA_id not in ports or nodeB_id not in ports:
+                    logging.error(colored("Invalid node IDs. Please choose from available ports.", 'red'))
+                    continue
+
+                # Select the correct winner's delay based on the operation
+                winning_node_delayed = True if operation == "A_wins" else False
+
+                # Connect and propose value for Node A
+                serverA = xmlrpc.client.ServerProxy(f"http://localhost:{nodeA_id}")
+                responseA = serverA.propose_value(valueA, winning_node_delayed, delay)
+                logging.info(colored(f"Node {nodeA_id} responded: {responseA}", 'green'))
+
+                # Slight delay before proposing to Node B
+                time.sleep(0.01)
+                serverB = xmlrpc.client.ServerProxy(f"http://localhost:{nodeB_id}")
+                responseB = serverB.propose_value(valueB)
+                logging.info(colored(f"Node {nodeB_id} responded: {responseB}", 'green'))
+
+            except Exception as e:
+                logging.error(colored(f"Error in '{operation}' command: {e}", 'red'))
+
+        elif command.startswith("set value"):
+            try:
                 parts = command.split()
                 value = int(parts[2])
                 port = int(parts[4])
 
-                # Validate if the port is in available ports
                 if port not in ports:
-                    logging.error(colored(f"Invalid port {port}. Choose from {ports}.",'red'))
+                    logging.error(colored(f"Invalid port {port}. Choose from {ports}.", 'red'))
                     continue
 
-                # Connect to the chosen server
                 server = xmlrpc.client.ServerProxy(f"http://localhost:{port}")
-
-                # Call the propose_value function on the specified server
                 response = server.propose_value(value)
-                logging.info(colored(f"Server on port {port} responded: {response}",'green'))
+                logging.info(colored(f"Server on port {port} responded: {response}", 'green'))
 
-            except (ValueError, IndexError):
-                logging.error(colored("Invalid command format. Use 'set value <number> on <port>'.",'red'))
             except Exception as e:
-                logging.error(colored(f"Error executing command on server: {e}","red"))
+                logging.error(colored(f"Error executing 'set value' command: {e}", "red"))
+        
+        elif command.lower() == "restart":
+            try:
+                # Iterate over all ports to restart each server
+                for port in ports:
+                    server = xmlrpc.client.ServerProxy(f"http://localhost:{port}")
+                    response = server.restart_server()
+                    logging.info(colored(f"Server on port {port} restarted: {response}", 'green'))
+
+            except Exception as e:
+                logging.error(colored(f"Error restarting servers: {e}", "red"))
+        
         else:
-            logging.error(colored("Invalid command. Use 'set value <value> on <node_number>' or 'exit' to quit.",'red'))
+            logging.error(colored("Invalid command. Please follow the correct syntax.", 'red'))
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,7 @@
 import xmlrpc.server
 import xmlrpc.client
-import time
+import threading
+import random
 import logging
 import os
 import sys
@@ -36,7 +37,7 @@ class Acceptor:
             logging.info(colored(f"STEP 3: Respond to Prepare({proposal_id}): Setting minProposal to {proposal_id}", 'green'))
 
         # If proposal_id is smaller than the current minProposal, reject the proposal
-        elif proposal_id < self.minProposal:
+        else:
             self.promise = False
             logging.info(colored(f"STEP 3: Respond to Prepare({proposal_id}): Rejected proposal because {proposal_id} < {self.minProposal}", 'red'))
 
@@ -52,25 +53,91 @@ class Acceptor:
         return False
 
 # Paxos Algorithm Implementation
+highestNum = 0
+highestNum_lock = threading.Lock()  # To synchronize access to `highestNum`
+
 class MyServer:
     def __init__(self, port, other_ports):
         self.port = port
         self.other_ports = other_ports
         self.file_path = f"{port}/CISC5597.txt"
-        self.proposer_id = port   # Use port as unique proposer ID
+        self.proposer_id = random.randint(1, 999)   # use random value for proposal ID
         self.acceptors = [Acceptor() for _ in other_ports]  # Acceptor instances for other nodes
         os.makedirs(str(port), exist_ok=True)
         with open(self.file_path, 'w') as f:
             f.write("")  # Initialize the file as empty        
 
-    def propose_value(self, value):
-        
-        proposal_id = self.proposer_id
+    def propose_value(self, value, A_win = True, delay_value =0):
+        # to track the highest proposal number encountered
+        global highestNum
+        # Lock access to `highestNum` to avoid race conditions
+        with highestNum_lock:
+            # Get the current highestNum across all nodes
+            self.sync_highestNum()
+            print("//////////", highestNum)
+            
+            # Determine proposal_id based on global highestNum
+            if highestNum >= self.proposer_id:
+                # Ensure the new proposal_id is always higher
+                proposal_id = highestNum + 1
+            else:
+                # If proposer_id is higher, use it and update highestNum
+                proposal_id = self.proposer_id
+            print("********", proposal_id)
+
+            # Update global `highestNum` to be the latest used proposal ID
+            highestNum = proposal_id
+        print(self.proposer_id,proposal_id,"*-*-*-*----*-*-- proposal id", highestNum)
+
         proposals = {}
         promises = 0
         required_majority = 2 #we do not count the node that sends the req to itself 
 
+        # Prepare Phase
+        promises, proposals = self.prepare_phase(proposal_id)
+
+        # Step 4: Check if majority response were received, if so then proceed to Accept Phase
+        if promises >= required_majority:
+            if proposals:
+
+                highest_proposal_id = max(proposals)
+
+                # accepted_value = proposals[highest_proposal_id]
+                value = proposals[highest_proposal_id]  # Replace proposed value with the accepted value for highest accepted proposal ID
+                logging.info(colored(f"STEP 4.2: Using previously accepted value: {value} from proposal ID: {highest_proposal_id}", 'cyan'))
+
+            # Accept phase
+            if self.accept_phase(proposal_id, value, required_majority):
+                logging.info(colored(f"Consensus reached on value: {value}. Broadcasting commit.", 'blue'))
+                self.broadcast_commit(value)
+                return f"Value '{value}' has been updated and committed."
+
+        return "Failed to reach consensus."
+    
+    def sync_highestNum(self):
+        """ Synchronize the highestNum value across all nodes by querying other nodes. """
+        global highestNum
+        # Sync highestNum by asking other nodes
+        for acceptor_port in self.other_ports:
+            try:
+                with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
+                    # Get the latest highestNum from the acceptor node
+                    highestNum_from_node = proxy.get_highestNum()
+                    # Update the global highestNum if the node's value is higher
+                    if highestNum_from_node > highestNum:
+                        highestNum = highestNum_from_node
+            except Exception as e:
+                print(f"Error syncing highestNum with node {acceptor_port}: {e}")
+
+    def get_highestNum(self):
+        """ Get the current highest proposal number. """
+        global highestNum
+        return highestNum
+    
+    def prepare_phase(self, proposal_id):
+        promises, proposals = 0, {}
         logging.info(colored(f"STEP 1: PREPARE({proposal_id}) by node {self.port}", 'blue'))
+
         for acceptor_port in self.other_ports:
             try:
                 with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
@@ -82,57 +149,31 @@ class MyServer:
                     logging.info(colored(f"STEP 4: Received Respond to Prepare({proposal_id}) from {acceptor_port}", 'blue'))
                     if received_promise:
                         promises += 1
-                    print("PROMISES-=-==-==-=", promises)
 
                     """This will be executed only if step 2 returned a previously set value on acceptedValue"""
                     if accepted_value:
                         logging.info(colored(f"STEP 4.1: acceptedValue: {accepted_value} was returned in the response from node {acceptor_port} with proposal ID: {acceptedProposal_id}", 'cyan'))
                         proposals[acceptedProposal_id] = accepted_value
-                        print("proposals[acceptedProposal_id]*-*-*-*-*----*",proposals[acceptedProposal_id])
-                    print("*-**--*-*--*-*-*--*--*- Test 1")
 
             except Exception as e:
                 logging.error(colored(f"Error during prepare phase with node {acceptor_port}: {e}", "red"))
-                    # if received_promise:
-                    #     promises += 1
-                    # print("PROMISES-=-==-==-=", promises)
-        # Step 4: Check if majority response were received
-        print("*-**--*-*--*-*-*--*--*- Test 2")
-        if promises >= required_majority:
-            # Step 4: Use the accepted value with the highest proposal ID if any exists
-            print("*-**--*-*--*-*-*--*--*- Test 3")
-            
-            if proposals:
-                print("PROPOSAL //////////",proposals)
+        
+        return promises, proposals
 
-                highest_proposal_id = max(proposals)
-                print("//////////",highest_proposal_id)
-
-                # accepted_value = proposals[highest_proposal_id]
-                value = proposals[highest_proposal_id]  # Replace proposed value with the accepted value for highest accepted proposal ID
-                logging.info(colored(f"STEP 4.2: Node on port {self.port} using previously accepted value: {value} from highest proposal ID: {highest_proposal_id}", 'cyan'))
-
-            # Step 5: Accept phase
-            accepted_count = 0
-            for acceptor_port in self.other_ports:
-                print("*-**--*-*--*-*-*--*--*- Test 4")
-                proposal = Proposal(proposal_id, value)
-                try:
-                    with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
-                        logging.info(colored(f"STEP 5: Broadcast Accept({proposal_id},{value}) to all servers", 'blue'))
-                        if proxy.accept(proposal.__dict__):
-                            accepted_count += 1
-                except Exception as e:
-                    logging.error(f"Error during accept phase with node {acceptor_port}: {e}")
-
-            # Step 7: Commit if majority of acceptors accepted the proposal
-            if accepted_count >= required_majority:
-                logging.info(colored(f"STEP 7: Node on port {self.port} reached consensus with n: {self.proposer_id} value: {value}. Broadcasting commit.", 'blue'))
-                
-                self.broadcast_commit(value)
-                return f"Value '{value}' has been updated and committed."
-
-        return "Failed to reach consensus."
+    def accept_phase(self, proposal_id, value, required_majority):
+        accepted_count = 0
+        proposal = Proposal(proposal_id, value)
+        
+        for acceptor_port in self.other_ports:
+            try:
+                with xmlrpc.client.ServerProxy(f"http://localhost:{acceptor_port}") as proxy:
+                    logging.info(colored(f"STEP 5: Broadcast Accept({proposal_id},{value}) to server {acceptor_port}", 'blue'))
+                    if proxy.accept(proposal.__dict__):
+                        accepted_count += 1
+            except Exception as e:
+                logging.error(f"Error during accept phase with node {acceptor_port}: {e}")
+        
+        return accepted_count >= required_majority
 
 # Broadcast Prepare(n) to all servers
     def prepare(self, proposal_id):
@@ -173,6 +214,29 @@ class MyServer:
         logging.info(colored(f"Node on port {self.port} received commit for value: '{value}'", 'yellow'))
         self.update_file(value)
 
+    def restart(self):
+        """Reset the server state to its initial conditions."""
+        logging.info(colored(f"Restarting server on port {self.port} to initial state...", 'yellow'))
+        
+        # Reset proposal-related variables
+        global highestNum
+        highestNum = 0  # Reset global highestNum
+        
+        # Reset acceptor state for this server
+        for acceptor in self.acceptors:
+            acceptor.minProposal = None
+            acceptor.acceptedProposal = None
+            acceptor.acceptedValue = None
+            acceptor.promise = False
+        
+        logging.info(colored(f"Server on port {self.port} has been reset.", 'green'))
+
+    # Method to expose restart functionality to XML-RPC
+    def restart_server(self):
+        """Handle XML-RPC request to restart the server."""
+        self.restart()
+        return "Server has been restarted."
+    
 def run_server(port, other_ports):
     server = xmlrpc.server.SimpleXMLRPCServer(("localhost", port), allow_none=True)
     my_server = MyServer(port, other_ports)
