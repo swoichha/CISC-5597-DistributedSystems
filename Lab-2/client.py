@@ -11,13 +11,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Define IP addresses for each port
 server_ips = {
-    8000: "127.0.0.1",
-    8001: "127.0.0.1",
-    8002: "127.0.0.1",
-    8003: "127.0.0.1",
-    8004: "127.0.0.1"
+    8000: "10.128.0.10",
+    8001: "10.128.0.6",
+    8002: "10.128.0.7",
+    8003: "10.128.0.5",
+    8004: "10.128.0.9"
 }
-
+    
 def get_server_url(port):
     """Returns the server URL based on the port."""
     ip = server_ips.get(port, "localhost")

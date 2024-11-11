@@ -19,11 +19,11 @@ acceptedValue_lock = threading.Lock()
 
 # Define server IPs and ports based on the node identifier
 SERVER_IPS = {
-    0: "127.0.0.1",
-    1: "127.0.0.1",
-    2: "127.0.0.1",
-    3: "127.0.0.1",
-    4: "127.0.0.1"
+    0: "10.128.0.10",
+    1: "10.128.0.6",
+    2: "10.128.0.7",
+    3: "10.128.0.5",
+    4: "10.128.0.9"
 }
 PORTS = [8000, 8001, 8002, 8003, 8004]
 
