@@ -1,7 +1,7 @@
 # CISC-5597-DistributedSystems
 
 ## Recording of Demo:
-https://drive.google.com/drive/folders/1LYTO47_V7V6smGLSkm_OMiu_u_BuDj-m?usp=sharing
+https://drive.google.com/drive/folders/183erjt81vkJWHoBAJt9_jBWzImnTrMX2?usp=sharing
 
 ## Report
 
@@ -47,7 +47,11 @@ A_wins: Simulates a scenario for two proposers where the first node (A) proposes
 
 B_wins: Simulates a scenario for two proposers where the second node (B) wins a proposal(slide 23) 
 
-Restart: Resets all nodes to their initial states.  
+BB_wins: Simulates Simulates a scenario for two proposers where the second node (B) wins a proposal(slide 24) 
+
+livelock: Simulates a scenario for two proposers where the second node (B) wins a proposal(slide 25) 
+
+restart: Resets all nodes to their initial states.  
 
 2. Server: 
 
@@ -187,6 +191,10 @@ Sample Commands and Outputs:
 
    - Output: All nodes are restarted and their states reset. 
 
+4. Command: BB_wins 8000 8004 456 123 
+
+5. livelock 8000 8004 111 333 
+
  Challenges 
 
 - Concurrency Issues: Handling multiple concurrent requests and ensuring thread safety in the client and server was a challenge. This was resolved using thread locks to manage access to shared variables. 
@@ -222,5 +230,7 @@ A_wins <port_of_node1>  <port_of_ node1> <value_for_node1> <value_for_node2>
 B_wins  <port_of_node1>  <port_of_ node1> <value_for_node1> <value_for_node2> 
 
 BB_wins <port_of_node1>  <port_of_ node1> <value_for_node1> <value_for_node2>  
+
+Licelock <port_of_node1>  <port_of_ node1> <value_for_node1> <value_for_node2> 
 
 restart 
