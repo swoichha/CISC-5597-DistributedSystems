@@ -322,6 +322,77 @@ class MyServer:
         else:
             print("Failed to reach consensus in Accept phase.")
             return False
+    
+    def propose_livelock(self,value,proposal_num,node_id,other_node_ids,delay=None):
+        global acceptedProposal, acceptedValue
+        proposals = {}
+        proposal_num = proposal_num
+        self.other_node_ids = other_node_ids
+        self.peers = [
+            xmlrpc.client.ServerProxy(f"http://{SERVER_IPS[other_id % 10]}:{PORTS[other_id % 10]}",allow_none=True)
+            for other_id in other_node_ids
+        ]
+        agreed_value = value
+        responses = 0
+        logging.info(colored(f"STEP 1: PREPARE({proposal_num})--> Node on port {self.ip} preparing request with proposal id: {proposal_num}", 'blue'))
+        logging.info(colored(f"STEP 2: Broadcast Prepare({proposal_num}) to all servers", 'blue'))
+
+        for peer in self.peers:
+            logging.info(colored(f"STEP 2: Node on port {self.ip} send Prepare({proposal_num}) to node at port: {peer}", 'cyan'))
+            try:
+                accepted_id, accepted_value,promise = peer.prepare(proposal_num)
+                logging.info(colored(f"Step 4.1: Received Respond to Prepare({proposal_num})", 'blue'))
+                if promise:
+                    logging.info(colored(f"Step 4.2: acceptedValue: {accepted_value} was returned in the response from {peer} with proposal ID: {accepted_id}", 'blue'))
+                    responses +=1
+                    logging.info(colored(f"Step 4.3: Replaced 'value' with acceptedValue for highest acceptedValue: {accepted_value} was returned in the response from {peer} with proposal ID: {accepted_id}", 'blue'))
+                if accepted_value:
+                    proposals[accepted_id] = accepted_value
+            except Exception as e:
+                logging.error(colored(f"Error during prepare phase with node {peer}: {e}", "red"))
+
+        if responses >= 2:
+            if proposals:
+                highest_proposal_id = max(proposals)
+                with acceptedProposal_lock:
+                    acceptedProposal = highest_proposal_id
+                if highest_proposal_id is not None:
+                    agreed_value = proposals[highest_proposal_id]
+        else:
+            print("Failed to reach majority in Prepare phase.")
+            return False
+
+        
+        with acceptedValue_lock:
+            acceptedValue = agreed_value
+        # value = proposals[highest_proposal_id]  # Replace proposed value with the accepted value for highest accepted proposal ID
+
+        accept_count = 0
+        logging.info(colored(f"Step 4: Node on port {self} using previously accepted value: {agreed_value} ", 'green'))
+        with ThreadPoolExecutor() as executor:
+            future_to_peer = {}
+            for i, peer in enumerate(self.peers):
+                print(f"Preparing {i} to send accept to peer {peer.port} with proposal_num: {proposal_num}, delay: {delay[i]}")
+                future = executor.submit(self.send_accept_with_delay, peer, proposal_num, agreed_value, delay[i],5)
+                future_to_peer[future] = peer
+            logging.info(colored(f"STEP 5: Broadcast Accept({proposal_num}) to all servers", 'blue'))
+            for future in as_completed(future_to_peer):
+                peer = future_to_peer[future]
+                try:
+                    response = future.result()
+                    if response:
+                        self.update_file(value)
+                        # peer.receive_commit(agreed_value)
+                        accept_count += 1
+                except Exception as e:
+                    logging.error(colored(f"Error during accept phase with node {peer}: {e}", "red"))
+        if accept_count >= 2:
+            self.update_file(agreed_value)
+            print(f"Value '{agreed_value}' has been updated and committed.")
+            return True
+        else:
+            print("Failed to reach consensus in Accept phase.")
+            return False
 
 
 def run_server(node_id, other_node_ids):
