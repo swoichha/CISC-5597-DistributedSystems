@@ -35,7 +35,7 @@ class ParticipantA:
                 logging.info(colored(f"Account A does not exists", 'red'))
                 return self.prepared
             else:
-                self.balance = int(read_account(self.account_file))
+                self.balance = float(read_account(self.account_file))
                 if self.transcation_number == 1:                                    
                     # Simulate the operation: subtract $100 and add 20% bonus
                     if self.balance >= 100:

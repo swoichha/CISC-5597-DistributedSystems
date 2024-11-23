@@ -23,26 +23,7 @@ class Coordinator:
         self.transaction_number = None
         self.scenario_number = None
         self.initialized_scenarios = set()  # Tracks initialized scenarios
-
-    def doCommitOnNode(self, participant, transaction_number):
-        """Attempt to commit for a participant."""
-        try:
-            logging.info(colored(f"Attempting to commit on", 'blue'))
-            A_commit_status, increment = participant.doCommit(transaction_number)
-            print("*------*--*---", A_commit_status, increment)
-            logging.info(colored(f"Attempting to commit on {participant}", 'blue'))
-            B_commit_status = participant.doCommit(transaction_number, increment)
-
-            if A_commit_status and B_commit_status:
-                logging.info(colored("Transaction Committed Successfully to node A and B", 'green'))
-                return True
-            else:
-                self.abort_transaction()
-                logging.info(colored("Transaction Aborted on node A and B", 'red'))
-                return False
-        except Exception as e:
-            logging.error(colored(f"Error during commit transaction: {str(e)}", 'red'))
-        
+     
     def abort_transaction(self):
         """Abort transaction for all participants."""
         logging.warning(colored("Aborting transaction for all participants", 'red'))

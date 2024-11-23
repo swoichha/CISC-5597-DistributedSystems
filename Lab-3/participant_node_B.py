@@ -35,7 +35,7 @@ class ParticipantB:
                 logging.info(colored(f"Account B does not exists", 'red'))        
             else:
                 self.prepared = True
-                self.balance = int(read_account(self.account_file))
+                self.balance = float(read_account(self.account_file))
                 logging.info(colored(f"Account B exists and balance is {self.balance}", 'green'))                
             return self.prepared   
         
@@ -69,23 +69,23 @@ class ParticipantB:
             logging.error(colored(f"Error during commit: {str(e)}", 'red'))  
 
 
-    def prepare(self):
-        try:
-            balance = int(read_account(self.account_file))
-            # Simulate the operation: add $100 and 20% of A's balance
-            new_balance = balance + 100 + (0.2 * int(read_account("account_A.txt")))
-            write_account(self.temp_file, new_balance)
-            self.prepared = True
-            return "PREPARED"
-        except Exception as e:
-            return f"ERROR: {str(e)}"
+    # def prepare(self):
+    #     try:
+    #         balance = float(read_account(self.account_file))
+    #         # Simulate the operation: add $100 and 20% of A's balance
+    #         new_balance = balance + 100 + (0.2 * int(read_account("account_A.txt")))
+    #         write_account(self.temp_file, new_balance)
+    #         self.prepared = True
+    #         return "PREPARED"
+    #     except Exception as e:
+    #         return f"ERROR: {str(e)}"
 
-    def commit(self):
-        if self.prepared and os.path.exists(self.temp_file):
-            os.replace(self.temp_file, self.account_file)
-            self.prepared = False
-            return "COMMITTED"
-        return "NOT PREPARED"
+    # def commit(self):
+    #     if self.prepared and os.path.exists(self.temp_file):
+    #         os.replace(self.temp_file, self.account_file)
+    #         self.prepared = False
+    #         return "COMMITTED"
+    #     return "NOT PREPARED"
 
     def initialize_account(self, scenario_number):
         """
