@@ -23,7 +23,7 @@ class ParticipantB:
         self.balance = None
 
         with open("account_B.txt", "w") as file_B:
-            file_B.write(str('300'))
+            file_B.write(str('0.0'))
             
     def canCommit(self, transaction_number):
         self.transcation_number = transaction_number
@@ -35,7 +35,7 @@ class ParticipantB:
                 logging.info(colored(f"Account B does not exists", 'red'))        
             else:
                 self.prepared = True
-                self.balance = read_account(self.account_file)
+                self.balance = int(read_account(self.account_file))
                 logging.info(colored(f"Account B exists and balance is {self.balance}", 'green'))                
             return self.prepared   
         
@@ -49,19 +49,21 @@ class ParticipantB:
             if self.transcation_number == 1:
                 new_balance = self.balance + 100
                 write_account(self.account_file, new_balance)
+                logging.info(colored(f"Account B updated value from {self.balance} to {new_balance} after Transaction {self.transcation_number}", 'green'))
+
                 self.balance = new_balance
-                self.commit_status = True
-                
-                return self.commit_status
-        
+                self.commit_status = True                        
 
             elif self.transcation_number == 2:
                 new_balance = self.balance + increment
                 write_account(self.account_file, new_balance)
                 self.balance = new_balance
                 self.commit_status = True
-                
-                return self.commit_status
+                logging.info(colored(f"Account B increment value by {increment} after Transaction {self.transcation_number}", 'green'))
+                logging.info(colored(f"Account B new balance: {self.balance}", 'green'))
+            else:
+                logging.info(colored(f"Invlaid transaction {transaction_number} ", 'red'))
+            return self.commit_status
         
         except Exception as e:
             logging.error(colored(f"Error during commit: {str(e)}", 'red'))  
@@ -69,9 +71,9 @@ class ParticipantB:
 
     def prepare(self):
         try:
-            balance = read_account(self.account_file)
+            balance = int(read_account(self.account_file))
             # Simulate the operation: add $100 and 20% of A's balance
-            new_balance = balance + 100 + (0.2 * read_account("account_A.txt"))
+            new_balance = balance + 100 + (0.2 * int(read_account("account_A.txt")))
             write_account(self.temp_file, new_balance)
             self.prepared = True
             return "PREPARED"
@@ -85,12 +87,42 @@ class ParticipantB:
             return "COMMITTED"
         return "NOT PREPARED"
 
+    def initialize_account(self, scenario_number):
+        """
+        Set the initial value of the account based on the scenario number.
+        """
+        if scenario_number == 2:
+            self.balance = 50.0
+        else:
+            self.balance = 300.0
+        try:
+            write_account(self.account_file, self.balance)
+            logging.info(colored(f"Account initialized with {self.balance} for Scenario {scenario_number}.", 'blue'))
+            return True
+        except Exception as e:
+            logging.error(colored(f"Error initializing account: {e}", 'red'))
+            return False
+    
     def abort(self):
         if os.path.exists(self.temp_file):
             os.remove(self.temp_file)
         self.prepared = False
         return "ABORTED"
 
+    def restart(self):
+        """Reset the participant's state to its initial configuration."""
+        self.prepared = False
+        self.transaction_number = None
+        self.balance = 0.0
+        self.commit_status = False
+
+        if os.path.exists(self.account_file):
+            with open(self.account_file, 'w') as file:
+                file.write(f"{self.balance:.2f}")  
+
+        logging.info(colored("Participant state reset successfully.", 'blue'))
+        return "Participant B state reset successfully."
+    
 def main():
     participant = ParticipantB()
     with SimpleXMLRPCServer(("localhost", 8003),allow_none=True) as server:

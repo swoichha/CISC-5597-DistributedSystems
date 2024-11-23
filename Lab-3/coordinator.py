@@ -21,6 +21,8 @@ class Coordinator:
         self.participant_1 = ServerProxy(participant_1, allow_none=True)
         self.participant_2 = ServerProxy(participant_2,allow_none=True)
         self.transaction_number = None
+        self.scenario_number = None
+        self.initialized_scenarios = set()  # Tracks initialized scenarios
 
     def doCommitOnNode(self, participant, transaction_number):
         """Attempt to commit for a participant."""
@@ -58,7 +60,14 @@ class Coordinator:
         """Check if a participant can commit."""
         try:
             logging.info(colored(f"Checking if {participant} can commit", 'yellow'))
-            return participant.canCommit(transaction_number)
+            can_commit = participant.canCommit( transaction_number)
+            
+            if can_commit:
+                logging.info(colored(f"Particiapant agreed to can commit.", 'green'))
+            else:
+                logging.info(colored(f"Particiapant cannot commit.", 'red'))
+                
+            return can_commit
         except Exception as e:
             logging.error(colored(f"Error during canCommit for {participant}: {str(e)}", 'red'))
             return False
@@ -101,13 +110,34 @@ class Coordinator:
             logging.error(colored(f"Error during prepare phase: {str(e)}", 'red'))
             return False        
 
-    def execute_transaction(self,transaction_number):
+    def execute_transaction(self, scenario_number,transaction_number):
         """Execute the distributed transaction."""
         self.transaction_number = transaction_number
+        self.scenario_number = scenario_number
+        try:
+            # Initialize accounts only if this scenario hasn't been initialized
+            if scenario_number not in self.initialized_scenarios:
+                initialize_val_A = self.participant_1.initialize_account(self.scenario_number)
+                initialize_val_B = self.participant_2.initialize_account(self.scenario_number)
+
+                if initialize_val_A and initialize_val_B:
+                    self.initialized_scenarios.add(scenario_number)
+                    logging.info(colored(f"Accounts initialized for scenario {scenario_number}.", 'green'))
+                else:
+                    logging.error(colored(f"Failed to initialize accounts for scenario {scenario_number}.", 'red'))
+                    return f"Error during initializing values for scenario {scenario_number}.", False
+            else:
+                logging.info(colored(f"Scenario {scenario_number} already initialized. Skipping initialization.", 'yellow'))
+
+
+        except Exception as e:
+            logging.error(colored(f"Error during initializing value for scenario {self.scenario_number} before starting 2PC: {str(e)}", 'red'))
+            return f"Error during initializing value for scenario {self.scenario_number} before starting 2PC: {str(e)}",False
+        
         try:
             # Prepare Phase
             logging.info(colored("Prepare Phase Initiated", 'green'))
-            canCommit = self.preparePhase( self.transaction_number)
+            canCommit = self.preparePhase(self.transaction_number)
             logging.info(colored("Prepare Phase Completed ", 'green'))
 
             # Commit Phase
@@ -117,9 +147,9 @@ class Coordinator:
 
                 if doCommitStatus:
                     logging.info(colored("Transaction Committed Successfully to node A and B", 'green'))    
-                    return f"Transaction {transaction_number} Committed Successfully", True
+                    return f"Transaction Committed Successfully", True
                 else:                    
-                    return "Transaction{self.transaction_number} Failed", False
+                    return "Transaction Failed", False
             else:
                 logging.info(colored("Transaction Aborted Initiated on node A and B", 'red'))
                 self.abort_transaction()
@@ -128,8 +158,29 @@ class Coordinator:
         except Exception as e:
             self.abort_transaction()
             logging.error(colored(f"Transaction Failed: {str(e)}", 'red'))
-            
-    
+        
+        
+    def restart(self):
+        """Reset the coordinator's state and all participants."""
+        self.transaction_number = None
+        self.scenario_number = None
+        self.initialized_scenarios.clear()  # Clear the initialized scenarios set
+
+        try:
+            logging.info(colored("Resetting Participant A...", 'blue'))
+            restart_A = self.participant_1.restart()
+            logging.info(colored(f"{restart_A}", 'blue'))
+
+            logging.info(colored("Resetting Participant B...", 'blue'))
+            restart_B = self.participant_2.restart()
+            logging.info(colored(f"{restart_B}", 'blue'))
+
+            logging.info(colored("Coordinator and Participants state reset successfully.", 'green'))
+            return "Coordinator and Participants state reset successfully.", True
+        except Exception as e:
+            logging.error(colored(f"Error during restart: {str(e)}", 'red'))
+            return f"Error during restart: {str(e)}", False
+
     
 def main():
     coordinator = Coordinator("http://localhost:8002", "http://localhost:8003")

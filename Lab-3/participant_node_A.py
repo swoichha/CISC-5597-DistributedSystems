@@ -24,17 +24,18 @@ class ParticipantA:
         self.commit_status = False
 
         with open(self.account_file, "w") as file_A:
-            file_A.write(str('200'))
+            file_A.write(str('0.0'))
 
     def canCommit(self, transaction_number):
         self.transcation_number = transaction_number
         try:
+            logging.info(colored(f"CAN COMMIT:", 'yellow'))
             if not os.path.exists(self.account_file):
                 self.prepared = False   
                 logging.info(colored(f"Account A does not exists", 'red'))
                 return self.prepared
             else:
-                self.balance = read_account(self.account_file)
+                self.balance = int(read_account(self.account_file))
                 if self.transcation_number == 1:                                    
                     # Simulate the operation: subtract $100 and add 20% bonus
                     if self.balance >= 100:
@@ -42,6 +43,7 @@ class ParticipantA:
                         self.prepared = True
                     else:    
                         logging.info(colored(f"Account A exists and balance {self.balance} < 100", 'red'))
+                        self.prepared = False
                     return self.prepared   
                 elif self.transcation_number == 2:
                     if self.balance > 0:
@@ -77,7 +79,7 @@ class ParticipantA:
                 write_account(self.account_file, new_balance)
                 self.balance = new_balance
                 self.commit_status = True
-                logging.info(colored(f"Account A increment value bt {increment} after Transaction {self.transcation_number}", 'green'))
+                logging.info(colored(f"Account A increment value by {increment} after Transaction {self.transcation_number}", 'green'))
                 logging.info(colored(f"Account A new balance: {self.balance}", 'green'))
             
             else:
@@ -87,35 +89,43 @@ class ParticipantA:
         except Exception as e:
             logging.error(colored(f"Error during commit: {str(e)}", 'red'))  
 
-    # def prepare(self):
-    #     try:
-    #         balance = read_account(self.account_file)
-    #         logging.info(colored(f"Account A exists", 'green'))
-    #         # Simulate the operation: subtract $100 and add 20% bonus
-    #         if balance >= 100:
-    #             new_balance = balance - 100 + 0.2 * balance
-    #             logging.info(colored(f"writing {new_balance}", 'green'))
-    #             write_account(self.temp_file, new_balance)
-    #             self.prepared = True
-    #             return "PREPARED"
-    #         else:
-    #             return "INSUFFICIENT FUNDS"
-    #     except Exception as e:
-    #         return f"ERROR: {str(e)}"
-
-    # def commit(self):
-    #     if self.prepared and os.path.exists(self.temp_file):
-    #         os.replace(self.temp_file, self.account_file)
-    #         self.prepared = False
-    #         return "COMMITTED"
-    #     return "NOT PREPARED"
-
+    def initialize_account(self, scenario_number):
+        """
+        Set the initial value of the account based on the scenario number.
+        """
+        print("*-*--*--*----*---*",scenario_number )
+        if scenario_number == 2:
+            self.balance = 90.0
+        else:
+            self.balance = 200.0
+        try:
+            write_account(self.account_file, self.balance)
+            logging.info(colored(f"Account initialized with {self.balance} for Scenario {scenario_number}.", 'blue'))
+            return True
+        except Exception as e:
+            logging.error(colored(f"Error initializing account: {e}", 'red'))
+            return False
+    
     def abort(self):
         if os.path.exists(self.temp_file):
             os.remove(self.temp_file)
         self.prepared = False
         return "ABORTED"
+    
+    def restart(self):
+        """Reset the participant's state to its initial configuration."""
+        self.prepared = False
+        self.transaction_number = None
+        self.balance = 0.0
+        self.commit_status = False
 
+        if os.path.exists(self.account_file):
+            with open(self.account_file, 'w') as file:
+                file.write(f"{self.balance:.2f}")       
+
+        logging.info(colored("Participant state reset successfully.", 'blue'))
+        return "Participant A state reset successfully."
+    
 def main():
     participant = ParticipantA()
     with SimpleXMLRPCServer(("localhost", 8002),allow_none=True) as server:
