@@ -3,18 +3,9 @@ from xmlrpc.client import ServerProxy
 import logging
 from termcolor import colored  # For colored logging
 import sys
+import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Define server IPs and ports based on the node identifier
-SERVER_IPS = {
-    0: "10.128.0.10",
-    1: "10.128.0.6",
-    2: "10.128.0.7",
-    3: "10.128.0.5",
-    4: "10.128.0.9"
-}
-PORTS = [8000, 8001, 8002, 8003, 8004]
 
 class Coordinator:
     def __init__(self, participant_1, participant_2):
@@ -39,18 +30,19 @@ class Coordinator:
 
     def canNodesCommit(self, participant,transaction_number):
         """Check if a participant can commit."""
+        participant_name = "Participant A" if participant == self.participant_1 else "Participant B"
         try:
-            logging.info(colored(f"Checking if {participant} can commit", 'yellow'))
+            logging.info(colored(f"Checking if {participant_name} can commit", 'yellow'))
             can_commit = participant.canCommit( transaction_number)
             
             if can_commit:
-                logging.info(colored(f"Particiapant agreed to can commit.", 'green'))
+                logging.info(colored(f"{participant_name} agreed to commit.", 'green'))
             else:
-                logging.info(colored(f"Particiapant cannot commit.", 'red'))
+                logging.info(colored(f"{participant_name} cannot commit.", 'red'))
                 
             return can_commit
         except Exception as e:
-            logging.error(colored(f"Error during canCommit for {participant}: {str(e)}", 'red'))
+            logging.error(colored(f"Error during canCommit for {participant_name}: {str(e)}", 'red'))
             return False
         
     def commitPhase(self,transaction_number):
@@ -76,16 +68,36 @@ class Coordinator:
     def preparePhase(self,transaction_number):
         # Prepare Phase
         """Check if a participant can commit."""
+        
         try:
             logging.info(colored(f"Checking if participant A can commit", 'yellow'))
             canAcommit = self.canNodesCommit(self.participant_1,transaction_number)
-            logging.info(colored(f"Checking if participant B can commit", 'yellow'))
-            canBcommit = self.canNodesCommit(self.participant_2,transaction_number)
-
-            if canAcommit and canBcommit:
-                return True
-            else:
+            # Step 1: Check Node-A
+            if not canAcommit:
+                logging.warning(colored("Node-A cannot commit. Aborting transaction.", 'red'))
                 return False
+            
+            # Step 2: Check Node-B with timeout          
+            logging.info(colored(f"Checking if participant B can commit", 'yellow'))
+            response_B = [None]  # Use a list to capture response from thread
+
+            def check_node_b():
+                response_B[0] = self.canNodesCommit(self.participant_2, transaction_number)
+
+            # Start the thread to wait for Node-B's response
+            thread = threading.Thread(target=check_node_b)
+            thread.start()
+            thread.join(timeout=5)  # Wait for up to 5 seconds
+
+            if response_B[0] is None:  # Timeout occurred
+                logging.error(colored("Timeout waiting for Node-B's response. Aborting transaction.", 'red'))
+                return False  # Or handle it as you wish (e.g., partial commit, abort, etc.)
+            elif not response_B[0]:  # Node-B explicitly cannot commit
+                logging.warning(colored("Node-B cannot commit. Aborting transaction.", 'red'))
+                return False
+
+            # If both nodes can commit
+            return True
             
         except Exception as e:
             logging.error(colored(f"Error during prepare phase: {str(e)}", 'red'))
@@ -118,11 +130,11 @@ class Coordinator:
         try:
             # Prepare Phase
             logging.info(colored("Prepare Phase Initiated", 'green'))
-            canCommit = self.preparePhase(self.transaction_number)
-            logging.info(colored("Prepare Phase Completed ", 'green'))
+            canCommit = self.preparePhase(self.transaction_number)  # Timeout set to 10 seconds            
 
             # Commit Phase
             if canCommit:
+                logging.info(colored("Prepare Phase Successfully Completed ", 'green'))
                 logging.info(colored("Commit Phase Initiated", 'green'))
                 doCommitStatus = self.commitPhase( self.transaction_number)               
 
@@ -132,14 +144,14 @@ class Coordinator:
                 else:                    
                     return "Transaction Failed", False
             else:
-                logging.info(colored("Transaction Aborted Initiated on node A and B", 'red'))
+                logging.error(colored("Transaction Aborted Initiated on node A and B", 'red'))
                 self.abort_transaction()
                 return "Transaction Aborted", False
 
         except Exception as e:
             self.abort_transaction()
             logging.error(colored(f"Transaction Failed: {str(e)}", 'red'))
-        
+            return "Transaction Aborted", False
         
     def restart(self):
         """Reset the coordinator's state and all participants."""

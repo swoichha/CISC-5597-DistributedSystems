@@ -110,6 +110,7 @@ class ParticipantA:
         if os.path.exists(self.temp_file):
             os.remove(self.temp_file)
         self.prepared = False
+        logging.info(colored(f"ABORTED !!!.", 'red'))
         return "ABORTED"
     
     def restart(self):

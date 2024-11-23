@@ -1,6 +1,7 @@
 from xmlrpc.server import SimpleXMLRPCServer
 import os
 import logging
+import time
 
 from termcolor import colored  # For colored logging
 
@@ -21,13 +22,20 @@ class ParticipantB:
         self.prepared = False
         self.transcation_number = None
         self.balance = None
+        self.crash_before = False
+        self.crash_after = False
 
         with open("account_B.txt", "w") as file_B:
             file_B.write(str('0.0'))
             
     def canCommit(self, transaction_number):
         self.transcation_number = transaction_number
-    
+
+        # Simulate a delay/crash for Node-B.
+        if self.crash_before:  # Simulate crash for Node-2
+            logging.warning(colored(f"Simulating crash for Transaction:{self.transcation_number} simulating a crash (long sleep)...", 'yellow'))
+            time.sleep(20)  # Simulate long sleep to represent crash
+            self.crash_before = False
         try:
             # Check if self.file exists
             if not os.path.exists(self.account_file):
@@ -95,6 +103,10 @@ class ParticipantB:
             self.balance = 50.0
         else:
             self.balance = 300.0
+            if scenario_number == 3:
+                self.crash_before = True
+            elif scenario_number == 4:
+                self.crash_after == True
         try:
             write_account(self.account_file, self.balance)
             logging.info(colored(f"Account initialized with {self.balance} for Scenario {scenario_number}.", 'blue'))
@@ -107,6 +119,7 @@ class ParticipantB:
         if os.path.exists(self.temp_file):
             os.remove(self.temp_file)
         self.prepared = False
+        logging.info(colored(f"ABORTED !!!.", 'red'))
         return "ABORTED"
 
     def restart(self):
