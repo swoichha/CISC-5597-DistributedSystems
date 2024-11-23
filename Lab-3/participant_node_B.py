@@ -52,7 +52,13 @@ class ParticipantB:
 
     def doCommit(self, transaction_number, increment = None):
         self.transcation_number = transaction_number
-        
+        print("/*/*/**/*/*/****/*/**", self.crash_after)
+        # Simulate a delay/crash for Node-B.
+        if self.crash_after:  # Simulate crash for Node-2
+            logging.warning(colored(f"Simulating crash for Transaction:{self.transcation_number} simulating a crash (long sleep)...", 'yellow'))
+            time.sleep(10)  # Simulate long sleep to represent crash
+            self.crash_after = False
+
         try:
             if self.transcation_number == 1:
                 new_balance = self.balance + 100
@@ -99,6 +105,7 @@ class ParticipantB:
         """
         Set the initial value of the account based on the scenario number.
         """
+        print("****** scenario number",scenario_number)
         if scenario_number == 2:
             self.balance = 50.0
         else:
@@ -106,7 +113,7 @@ class ParticipantB:
             if scenario_number == 3:
                 self.crash_before = True
             elif scenario_number == 4:
-                self.crash_after == True
+                self.crash_after = True
         try:
             write_account(self.account_file, self.balance)
             logging.info(colored(f"Account initialized with {self.balance} for Scenario {scenario_number}.", 'blue'))
@@ -128,6 +135,8 @@ class ParticipantB:
         self.transaction_number = None
         self.balance = 0.0
         self.commit_status = False
+        self.crash_before = False
+        self.crash_after = False
 
         if os.path.exists(self.account_file):
             with open(self.account_file, 'w') as file:

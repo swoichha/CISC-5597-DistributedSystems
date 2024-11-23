@@ -46,6 +46,7 @@ class Coordinator:
             return False
         
     def commitPhase(self,transaction_number):
+        
         # Commit Phase
         """Check if a participant can commit."""
         try:
@@ -53,17 +54,40 @@ class Coordinator:
             A_commit_status, increment  = self.participant_1.doCommit(transaction_number)
             print("*------*--*---", A_commit_status, increment)
             logging.info(colored(f"Attempting to commit on Node B", 'blue'))
-            B_commit_status = self.participant_2.doCommit(transaction_number, increment)
+            
+            # Simulate crash for Node B (after voting to commit, but before actually committing)
+            response_B = [None]  # Use a list to capture response from thread
+            
+            def commit_node_b():
+                # Participant B tries to commit
+                response_B[0] = self.participant_2.doCommit(transaction_number, increment)
+            
+            # Start the thread to wait for Node-B's response
+            thread_B = threading.Thread(target=commit_node_b)
+            thread_B.start()
+            thread_B.join(timeout=5)  # Wait for up to 5 seconds for Node B to commit
 
-            if A_commit_status and B_commit_status:
-                logging.info(colored("Transaction Committed Successfully to node A and B", 'green'))
+
+            if response_B[0] is None:  # Timeout occurred (simulating crash of Node B)
+                logging.error(colored("Timeout waiting for Node B's commit. Assuming crash.", 'red'))
+                # Simulate that Node B crashed, and abort the transaction
+                self.abort_transaction()
+                return False  # Return false indicating the transaction failed
+        
+            # If Node B commits successfully
+            if A_commit_status and response_B[0]:
+                logging.info(colored("Transaction Committed Successfully to Node A and B", 'green'))
                 return True
             else:
-                logging.info(colored("Error during commit phase:", 'red'))
+                logging.error(colored("Error during commit phase.", 'red'))
                 return False
+            
         except Exception as e:
             logging.error(colored(f"Error during commit transaction: {str(e)}", 'red'))
-        
+            logging.error(colored("Simulated crash for Node B. Aborting transaction.", 'red'))
+            self.abort_transaction()  # Abort transaction on both nodes
+            return False
+
         
     def preparePhase(self,transaction_number):
         # Prepare Phase
@@ -107,9 +131,11 @@ class Coordinator:
         """Execute the distributed transaction."""
         self.transaction_number = transaction_number
         self.scenario_number = scenario_number
+        print("/////////////", self.scenario_number)
         try:
             # Initialize accounts only if this scenario hasn't been initialized
             if scenario_number not in self.initialized_scenarios:
+                print("//////// initialized",scenario_number)
                 initialize_val_A = self.participant_1.initialize_account(self.scenario_number)
                 initialize_val_B = self.participant_2.initialize_account(self.scenario_number)
 
