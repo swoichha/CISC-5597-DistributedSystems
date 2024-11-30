@@ -7,6 +7,7 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 class Coordinator:
     def __init__(self, participant_1, participant_2):
         self.participant_1 = ServerProxy(participant_1, allow_none=True)
@@ -14,9 +15,18 @@ class Coordinator:
         self.transaction_number = None
         self.scenario_number = None
         self.initialized_scenarios = set()  # Tracks initialized scenarios
-     
+        self.LOG_FILE = "coordinator_log.txt"
+
+        with open(self.LOG_FILE, "w") as file_coordinator_log:
+            file_coordinator_log.write(str(f'Log of Coordinator:\n'))
+
+    def log_action(self, action, scenario, transaction):
+        with open(self.LOG_FILE, "a") as LOG_FILE:
+            LOG_FILE.write(f"{action} {scenario} {transaction}\n\n")
+        return
     def abort_transaction(self):
         """Abort transaction for all participants."""
+        self.log_action("ABORT", self.scenario_number, self.transaction_number)
         logging.warning(colored("Aborting transaction for all participants", 'red'))
         try:
             self.participant_1.abort()
@@ -76,9 +86,11 @@ class Coordinator:
         
             # If Node B commits successfully
             if A_commit_status and response_B[0]:
+                self.log_action("Committed YES", self.scenario_number, self.transaction_number)
                 logging.info(colored("Transaction Committed Successfully to Node A and B", 'green'))
                 return True
             else:
+                self.log_action("Committed NO", self.scenario_number, self.transaction_number)
                 logging.error(colored("Error during commit phase.", 'red'))
                 return False
             
@@ -98,6 +110,7 @@ class Coordinator:
             canAcommit = self.canNodesCommit(self.participant_1,transaction_number)
             # Step 1: Check Node-A
             if not canAcommit:
+                self.log_action("Node A preparePhase NO", self.scenario_number, self.transaction_number)
                 logging.warning(colored("Node-A cannot commit. Aborting transaction.", 'red'))
                 return False
             
@@ -114,9 +127,11 @@ class Coordinator:
             thread.join(timeout=5)  # Wait for up to 5 seconds
 
             if response_B[0] is None:  # Timeout occurred
+                self.log_action("Node A preparePhase NO", self.scenario_number, self.transaction_number)
                 logging.error(colored("Timeout waiting for Node-B's response. Aborting transaction.", 'red'))
                 return False  # Or handle it as you wish (e.g., partial commit, abort, etc.)
             elif not response_B[0]:  # Node-B explicitly cannot commit
+                self.log_action("Node A preparePhase NO", self.scenario_number, self.transaction_number)
                 logging.warning(colored("Node-B cannot commit. Aborting transaction.", 'red'))
                 return False
 
@@ -131,18 +146,18 @@ class Coordinator:
         """Execute the distributed transaction."""
         self.transaction_number = transaction_number
         self.scenario_number = scenario_number
-        print("/////////////", self.scenario_number)
         try:
             # Initialize accounts only if this scenario hasn't been initialized
             if scenario_number not in self.initialized_scenarios:
-                print("//////// initialized",scenario_number)
                 initialize_val_A = self.participant_1.initialize_account(self.scenario_number)
                 initialize_val_B = self.participant_2.initialize_account(self.scenario_number)
 
                 if initialize_val_A and initialize_val_B:
                     self.initialized_scenarios.add(scenario_number)
+                    self.log_action("Accounts initialized for scenario", self.scenario_number, self.transaction_number)
                     logging.info(colored(f"Accounts initialized for scenario {scenario_number}.", 'green'))
                 else:
+                    self.log_action("Failed to initialize account for scenario", self.scenario_number, self.transaction_number)
                     logging.error(colored(f"Failed to initialize accounts for scenario {scenario_number}.", 'red'))
                     return f"Error during initializing values for scenario {scenario_number}.", False
             else:
@@ -160,6 +175,7 @@ class Coordinator:
 
             # Commit Phase
             if canCommit:
+                self.log_action("Prepare Phase Successfully Completed", self.scenario_number, self.transaction_number)
                 logging.info(colored("Prepare Phase Successfully Completed ", 'green'))
                 logging.info(colored("Commit Phase Initiated", 'green'))
                 doCommitStatus = self.commitPhase( self.transaction_number)               

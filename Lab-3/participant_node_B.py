@@ -5,21 +5,25 @@ import time
 
 from termcolor import colored  # For colored logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 def read_account(file_name):
     with open(file_name, 'r') as file:
         return float(file.read().strip())
 
 def write_account(file_name, value):
     with open(file_name, 'w') as file:
-        file.write(f"{value:.2f}")
+        file.write(f"{value:.2f}\n")
 
 class ParticipantB:
     def __init__(self):
         self.account_file = "account_B.txt"
+        self.LOG_FILE = "account_B_log.txt"
         self.temp_file = self.account_file + ".tmp"
         self.prepared = False
+        self.scenario_number = None
         self.transcation_number = None
         self.balance = None
         self.crash_before = False
@@ -27,7 +31,14 @@ class ParticipantB:
 
         with open("account_B.txt", "w") as file_B:
             file_B.write(str('0.0'))
-            
+
+        with open(self.LOG_FILE, "w") as file_B_log:
+            file_B_log.write(str(f'Log of Node B: \n\n'))
+
+    def log_action(self, action, scenario, transaction, amount=None ):
+        with open(self.LOG_FILE, "a") as LOG_FILE:
+            LOG_FILE.write(f"{action} {scenario} {transaction} {amount}\n\n")
+                           
     def canCommit(self, transaction_number):
         self.transcation_number = transaction_number
 
@@ -39,20 +50,22 @@ class ParticipantB:
         try:
             # Check if self.file exists
             if not os.path.exists(self.account_file):
-                self.prepared = False   
+                self.prepared = False
+                self.log_action("Vote NO", self.scenario_number, transaction_number)      
                 logging.info(colored(f"Account B does not exists", 'red'))        
             else:
                 self.prepared = True
                 self.balance = float(read_account(self.account_file))
+                self.log_action("Vote YES", self.scenario_number, transaction_number)                          
                 logging.info(colored(f"Account B exists and balance is {self.balance}", 'green'))                
             return self.prepared   
         
         except Exception as e:
+            self.log_action("Vote NO", self.scenario_number, transaction_number)      
             logging.error(colored(f"Error during canCommit for: {str(e)}", 'red'))     
 
     def doCommit(self, transaction_number, increment = None):
         self.transcation_number = transaction_number
-        print("/*/*/**/*/*/****/*/**", self.crash_after)
         # Simulate a delay/crash for Node-B.
         if self.crash_after:  # Simulate crash for Node-2
             logging.warning(colored(f"Simulating crash for Transaction:{self.transcation_number} simulating a crash (long sleep)...", 'yellow'))
@@ -64,22 +77,25 @@ class ParticipantB:
                 new_balance = self.balance + 100
                 write_account(self.account_file, new_balance)
                 logging.info(colored(f"Account B updated value from {self.balance} to {new_balance} after Transaction {self.transcation_number}", 'green'))
-
+                self.log_action("COMMITED YES", self.scenario_number, transaction_number, +100.00)
                 self.balance = new_balance
                 self.commit_status = True                        
 
             elif self.transcation_number == 2:
                 new_balance = self.balance + increment
                 write_account(self.account_file, new_balance)
+                self.log_action("COMMITED YES", self.scenario_number, transaction_number, increment)
                 self.balance = new_balance
                 self.commit_status = True
                 logging.info(colored(f"Account B increment value by {increment} after Transaction {self.transcation_number}", 'green'))
                 logging.info(colored(f"Account B new balance: {self.balance}", 'green'))
             else:
+                self.log_action("COMMITED NO", self.scenario_number, transaction_number)
                 logging.info(colored(f"Invlaid transaction {transaction_number} ", 'red'))
             return self.commit_status
         
         except Exception as e:
+            self.log_action("COMMITED NO", self.scenario_number, transaction_number)
             logging.error(colored(f"Error during commit: {str(e)}", 'red'))  
 
 
@@ -106,6 +122,7 @@ class ParticipantB:
         Set the initial value of the account based on the scenario number.
         """
         print("****** scenario number",scenario_number)
+        self.scenario_number = scenario_number
         if scenario_number == 2:
             self.balance = 50.0
         else:
@@ -123,9 +140,8 @@ class ParticipantB:
             return False
     
     def abort(self):
-        if os.path.exists(self.temp_file):
-            os.remove(self.temp_file)
         self.prepared = False
+        self.log_action("ABORT", self.scenario_number, self.transaction_number)
         logging.info(colored(f"ABORTED !!!.", 'red'))
         return "ABORTED"
 
