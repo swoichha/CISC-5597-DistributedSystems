@@ -24,17 +24,17 @@ class Coordinator:
         with open(self.LOG_FILE, "a") as LOG_FILE:
             LOG_FILE.write(f"{action} {scenario} {transaction}\n\n")
         return
-    def abort_transaction(self):
+    def abort_transaction(self, revert_A =False, revert_B =False):
         """Abort transaction for all participants."""
         self.log_action("ABORT", self.scenario_number, self.transaction_number)
         logging.warning(colored("Aborting transaction for all participants", 'red'))
         try:
-            self.participant_1.abort()
+            self.participant_1.abort(revert_A)
         except Exception as e:
             logging.error(colored(f"Error aborting transaction on node A: {str(e)}", 'red'))
 
         try:
-            self.participant_2.abort()
+            self.participant_2.abort(revert_B)
         except Exception as e:
             logging.error(colored(f"Error aborting transaction on node B: {str(e)}", 'red'))    
 
@@ -81,7 +81,7 @@ class Coordinator:
             if response_B[0] is None:  # Timeout occurred (simulating crash of Node B)
                 logging.error(colored("Timeout waiting for Node B's commit. Assuming crash.", 'red'))
                 # Simulate that Node B crashed, and abort the transaction
-                self.abort_transaction()
+                self.abort_transaction(True)
                 return False  # Return false indicating the transaction failed
         
             # If Node B commits successfully

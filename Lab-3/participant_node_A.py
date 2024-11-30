@@ -1,3 +1,4 @@
+import re
 from xmlrpc.server import SimpleXMLRPCServer
 import os
 import logging
@@ -26,7 +27,7 @@ class ParticipantA:
         self.temp_file = self.account_file + ".tmp"
         self.prepared = False
         self.scenario_number = None
-        self.transcation_number = None
+        self.transaction_number = None
         self.balance = None
         self.commit_status = False
 
@@ -38,7 +39,7 @@ class ParticipantA:
             
     def log_action(self, action, scenario, transaction, amount=None ):
         with open(self.LOG_FILE, "a") as LOG_FILE:
-            LOG_FILE.write(f"{action} {scenario} {transaction} {amount}\n\n")
+            LOG_FILE.write(f"\n\n{action} {scenario} {transaction} {amount}")
     
     def canCommit(self, transaction_number):
         self.transcation_number = transaction_number
@@ -131,7 +132,53 @@ class ParticipantA:
             logging.error(colored(f"Error initializing account: {e}", 'red'))
             return False
     
-    def abort(self):
+
+    def get_last_command(self):
+            try:
+                # Open the log file
+                with open(self.LOG_FILE, 'r') as log_file:
+                    # Read the last line from the file
+                    lines = log_file.readlines()
+                    if not lines:
+                        return None  # File is empty
+
+                    last_line = lines[-1].strip()
+                    return last_line  # Return the last line as the command
+
+            except Exception as e:
+                print(f"Error reading the log file: {e}")
+                return None
+
+    def get_last_commit_value(self, starts_with):
+        try:
+            last_command = self.get_last_command()  # Get the last command from the log
+            if last_command and last_command.startswith(starts_with):
+                # Use regular expression to find the last float number
+                match = re.search(r"([+-]?\d+\.\d+)$", last_command)
+                if match:
+                    # Extract and return the float value
+                    return float(match.group(1))
+                else:
+                    return None  # No float found at the end of the line
+            else:
+                return None  # Line does not start with the specified prefix
+
+        except Exception as e:
+            print(f"Error reading the log file: {e}")
+            return None
+
+ 
+
+    def abort(self, revert=False):
+        if revert:
+            value = self.get_last_commit_value("COMMITED YES")
+            if value is not None:
+                print(f"Extracted value: {value}")
+            else:
+                print("No valid 'COMMITTED YES' log found or error reading the log.")
+
+            print(self.balance,"/*/**/*****/*",value)  # Output: 20.0
+            write_account(self.account_file, self.balance - value)
         self.prepared = False
         self.log_action("ABORT", self.scenario_number, self.transaction_number)
         logging.info(colored(f"ABORTED !!!.", 'red'))

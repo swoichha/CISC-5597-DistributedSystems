@@ -1,6 +1,7 @@
 from xmlrpc.client import ServerProxy
 import logging
 from termcolor import colored
+import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -43,7 +44,6 @@ def main():
                     logging.info(colored(f"Transaction {first_transaction_number} Status: {resultMsg1}", 'green'))
                 else:
                     logging.info(colored(f"Transaction {first_transaction_number} Status: {resultMsg1}", 'red'))
-
                 # Execute the second transaction
                 resultMsg2, second_transaction_status = coordinator.execute_transaction(scenario_number, second_transaction_number)
                 if second_transaction_status:
