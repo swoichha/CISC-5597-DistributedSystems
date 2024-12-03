@@ -52,14 +52,7 @@ def main():
                     logging.info(colored(f"Transaction {second_transaction_number} Status: {resultMsg2}", 'red'))
 
             except Exception as e:
-                logging.error(colored(f"Error in command: {e}", 'red'))        
-
-        elif command.startswith("restart"):
-            try:
-                coordinator.restart()
-                logging.info(colored("Coordinator restarted successfully.", 'green'))
-            except Exception as e:
-                logging.error(colored(f"Error restarting coordinator: {e}", 'red'))
+                logging.error(colored(f"Error in command: {e}", 'red'))                
 
         else:
             logging.error(colored("Invalid command.", 'red'))

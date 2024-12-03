@@ -118,7 +118,6 @@ class ParticipantA:
         """
         Set the initial value of the account based on the scenario number.
         """
-        print("*-*--*--*----*---*",scenario_number )
         self.scenario_number = scenario_number
         if scenario_number == 2:
             self.balance = 90.0

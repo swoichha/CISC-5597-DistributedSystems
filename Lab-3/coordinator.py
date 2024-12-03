@@ -62,7 +62,6 @@ class Coordinator:
         try:
             logging.info(colored(f"Attempting to commit on Node A", 'blue'))
             A_commit_status, increment  = self.participant_1.doCommit(transaction_number)
-            print("*------*--*---", A_commit_status, increment)
             logging.info(colored(f"Attempting to commit on Node B", 'blue'))
             
             # Simulate crash for Node B (after voting to commit, but before actually committing)
