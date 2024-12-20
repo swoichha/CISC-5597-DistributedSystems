@@ -1,0 +1,65 @@
+version: "3.8"
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - kafka-network
+
+  kafka:
+    image: wurstmeister/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # Define the security protocol for the INSIDE listener
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT
+
+      # Define the listener for both internal broker communication and external access
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9092 # Kafka will listen on port 9092 for both internal and external
+
+      # Listener names - only INSIDE in this case
+      KAFKA_LISTENER_NAMES: INSIDE
+
+      # Advertise the same INSIDE listener to external clients
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9092
+
+      # Internal listener for broker-to-broker communication (uses the same INSIDE listener)
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+
+      # Zookeeper connection
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Kafka broker ID and replication factor
+      KAFKA_BROKER_ID: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+    depends_on:
+      - zookeeper
+    networks:
+      - kafka-network
+
+  kpow:
+    image: factorhouse/kpow-ce:93.4
+    container_name: kpow
+    ports:
+      - "8000:3000"
+    env_file:
+      - ./kpow.env
+    environment:
+      - KPOW_KAFKA_BROKERS=kafka:9092
+      - KPOW_ZOOKEEPER_SERVERS=zookeeper:2181
+      - KPOW_HTTP_PORT=8000
+    depends_on:
+      - kafka
+      - zookeeper
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    driver: bridge
